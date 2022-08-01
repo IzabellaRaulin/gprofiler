@@ -4,7 +4,8 @@
 # Licensed under the AGPL3 License. See LICENSE.md in the project root for license information.
 #
 set -euo pipefail
-
+echo "Acquire::http::Proxy \"http://proxy-chain.intel.com:911\";" > /etc/apt/apt.conf
+echo "Acquire::https::Proxy \"http://proxy-chain.intel.com:912\";" >> /etc/apt/apt.conf
 apt-get update
 apt-get install -y --no-install-recommends \
     gcc \

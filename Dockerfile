@@ -21,27 +21,27 @@ ARG BURN_BUILDER_GOLANG=@sha256:f7d3519759ba6988a2b73b5874b17c5958ac7d0aa48a8b1d
 ARG GPROFILER_BUILDER_UBUNTU=@sha256:cf31af331f38d1d7158470e095b132acd126a7180a54f263d386da88eb681d93
 
 # pyspy & rbspy builder base
-FROM rust${RUST_BUILDER_VERSION} AS pyspy-rbspy-builder-common
-WORKDIR /tmp
+# FROM rust${RUST_BUILDER_VERSION} AS pyspy-rbspy-builder-common
+# WORKDIR /tmp
 
-COPY scripts/prepare_machine-unknown-linux-musl.sh .
-RUN ./prepare_machine-unknown-linux-musl.sh
+# COPY scripts/prepare_machine-unknown-linux-musl.sh .
+# RUN ./prepare_machine-unknown-linux-musl.sh
 
 # pyspy
-FROM pyspy-rbspy-builder-common AS pyspy-builder
-WORKDIR /tmp
+# FROM pyspy-rbspy-builder-common AS pyspy-builder
+# WORKDIR /tmp
 
-COPY scripts/pyspy_build.sh .
-RUN ./pyspy_build.sh
-RUN mv "/tmp/py-spy/target/$(uname -m)-unknown-linux-musl/release/py-spy" /tmp/py-spy/py-spy
+# COPY scripts/pyspy_build.sh .
+# RUN ./pyspy_build.sh
+# RUN mv "/tmp/py-spy/target/$(uname -m)-unknown-linux-musl/release/py-spy" /tmp/py-spy/py-spy
 
 # rbspy
-FROM pyspy-rbspy-builder-common AS rbspy-builder
-WORKDIR /tmp
+# FROM pyspy-rbspy-builder-common AS rbspy-builder
+# WORKDIR /tmp
 
-COPY scripts/rbspy_build.sh .
-RUN ./rbspy_build.sh
-RUN mv "/tmp/rbspy/target/$(uname -m)-unknown-linux-musl/release/rbspy" /tmp/rbspy/rbspy
+# COPY scripts/rbspy_build.sh .
+# RUN ./rbspy_build.sh
+# RUN mv "/tmp/rbspy/target/$(uname -m)-unknown-linux-musl/release/rbspy" /tmp/rbspy/rbspy
 
 # perf
 FROM ubuntu${PERF_BUILDER_UBUNTU} AS perf-builder
@@ -58,6 +58,7 @@ RUN ./perf_build.sh
 
 # pyperf (bcc)
 FROM ubuntu${PYPERF_BUILDER_UBUNTU} AS bcc-builder-base
+
 
 # not cleaning apt lists here - they are used by subsequent layers that base
 # on bcc-builder-base.
@@ -106,6 +107,7 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
     ./libunwind_build.sh
 
 WORKDIR /bcc
+COPY bcc /bcc
 
 COPY ./scripts/pyperf_build.sh .
 RUN ./pyperf_build.sh
@@ -113,34 +115,34 @@ RUN ./pyperf_build.sh
 # phpspy
 FROM ubuntu${PHPSPY_BUILDER_UBUNTU} AS phpspy-builder
 WORKDIR /tmp
-COPY scripts/phpspy_env.sh .
-RUN ./phpspy_env.sh
-COPY scripts/phpspy_build.sh .
-RUN ./phpspy_build.sh
+# COPY scripts/phpspy_env.sh .
+# RUN ./phpspy_env.sh
+# COPY scripts/phpspy_build.sh .
+# RUN ./phpspy_build.sh
 
 # async-profiler glibc
 FROM centos${AP_BUILDER_CENTOS} AS async-profiler-builder-glibc
 WORKDIR /tmp
 COPY scripts/async_profiler_env_glibc.sh .
-RUN ./async_profiler_env_glibc.sh
-COPY scripts/async_profiler_build_shared.sh .
-COPY scripts/async_profiler_build_glibc.sh .
-RUN ./async_profiler_build_shared.sh /tmp/async_profiler_build_glibc.sh
+# RUN ./async_profiler_env_glibc.sh
+# COPY scripts/async_profiler_build_shared.sh .
+# COPY scripts/async_profiler_build_glibc.sh .
+# RUN ./async_profiler_build_shared.sh /tmp/async_profiler_build_glibc.sh
 
 # async-profiler musl
 FROM alpine${AP_BUILDER_ALPINE} AS async-profiler-builder-musl
 WORKDIR /tmp
-COPY scripts/async_profiler_env_musl.sh .
-RUN ./async_profiler_env_musl.sh
-COPY scripts/async_profiler_build_shared.sh .
-COPY scripts/async_profiler_build_musl.sh .
-RUN ./async_profiler_build_shared.sh /tmp/async_profiler_build_musl.sh
+# COPY scripts/async_profiler_env_musl.sh .
+# RUN ./async_profiler_env_musl.sh
+# COPY scripts/async_profiler_build_shared.sh .
+# COPY scripts/async_profiler_build_musl.sh .
+# RUN ./async_profiler_build_shared.sh /tmp/async_profiler_build_musl.sh
 
 # burn
 FROM golang${BURN_BUILDER_GOLANG} AS burn-builder
 WORKDIR /tmp
-COPY scripts/burn_build.sh .
-RUN ./burn_build.sh
+# COPY scripts/burn_build.sh .
+# RUN ./burn_build.sh
 
 # the gProfiler image itself, at last.
 FROM ubuntu${GPROFILER_BUILDER_UBUNTU}
@@ -159,29 +161,29 @@ RUN set -e; \
 
 COPY --from=bcc-builder /bcc/root/share/bcc/examples/cpp/PyPerf gprofiler/resources/python/pyperf/
 # copy licenses and notice file.
-COPY --from=bcc-builder /bcc/bcc/LICENSE.txt gprofiler/resources/python/pyperf/
-COPY --from=bcc-builder /bcc/bcc/licenses gprofiler/resources/python/pyperf/licenses
-COPY --from=bcc-builder /bcc/bcc/NOTICE gprofiler/resources/python/pyperf/
+# COPY --from=bcc-builder /bcc/bcc/LICENSE.txt gprofiler/resources/python/pyperf/
+# COPY --from=bcc-builder /bcc/bcc/licenses gprofiler/resources/python/pyperf/licenses
+# COPY --from=bcc-builder /bcc/bcc/NOTICE gprofiler/resources/python/pyperf/
 COPY --from=bcc-helpers /bpf_get_fs_offset/get_fs_offset gprofiler/resources/python/pyperf/
 COPY --from=bcc-helpers /bpf_get_stack_offset/get_stack_offset gprofiler/resources/python/pyperf/
 
-COPY --from=pyspy-builder /tmp/py-spy/py-spy gprofiler/resources/python/py-spy
+# COPY --from=pyspy-builder /tmp/py-spy/py-spy gprofiler/resources/python/py-spy
 
 COPY --from=perf-builder /perf gprofiler/resources/perf
 
-COPY --from=phpspy-builder /tmp/phpspy/phpspy gprofiler/resources/php/phpspy
-COPY --from=phpspy-builder /tmp/binutils/binutils-2.25/bin/bin/objdump gprofiler/resources/php/objdump
-COPY --from=phpspy-builder /tmp/binutils/binutils-2.25/bin/bin/strings gprofiler/resources/php/strings
+# COPY --from=phpspy-builder /tmp/phpspy/phpspy gprofiler/resources/php/phpspy
+# COPY --from=phpspy-builder /tmp/binutils/binutils-2.25/bin/bin/objdump gprofiler/resources/php/objdump
+# COPY --from=phpspy-builder /tmp/binutils/binutils-2.25/bin/bin/strings gprofiler/resources/php/strings
 
-COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/jattach gprofiler/resources/java/jattach
-COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/async-profiler-version gprofiler/resources/java/async-profiler-version
-COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/libasyncProfiler.so gprofiler/resources/java/glibc/libasyncProfiler.so
-COPY --from=async-profiler-builder-musl /tmp/async-profiler/build/libasyncProfiler.so gprofiler/resources/java/musl/libasyncProfiler.so
-COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/fdtransfer gprofiler/resources/java/fdtransfer
+# COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/jattach gprofiler/resources/java/jattach
+# COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/async-profiler-version gprofiler/resources/java/async-profiler-version
+# COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/libasyncProfiler.so gprofiler/resources/java/glibc/libasyncProfiler.so
+# COPY --from=async-profiler-builder-musl /tmp/async-profiler/build/libasyncProfiler.so gprofiler/resources/java/musl/libasyncProfiler.so
+# COPY --from=async-profiler-builder-glibc /tmp/async-profiler/build/fdtransfer gprofiler/resources/java/fdtransfer
 
-COPY --from=rbspy-builder /tmp/rbspy/rbspy gprofiler/resources/ruby/rbspy
+# COPY --from=rbspy-builder /tmp/rbspy/rbspy gprofiler/resources/ruby/rbspy
 
-COPY --from=burn-builder /tmp/burn/burn gprofiler/resources/burn
+# COPY --from=burn-builder /tmp/burn/burn gprofiler/resources/burn
 
 # we want the latest pip
 # hadolint ignore=DL3013
