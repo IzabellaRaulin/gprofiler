@@ -1,0 +1,10 @@
+PyPerf - eBPF Python Profiler
+Copyright (c) 2021 Granulate. All rights reserved.
+Licensed under the AGPL3 License. See LICENSE.txt for license information.
+
+This product includes software licensed under the Apache License Version 2.0.
+See licenses/LICENSE.apache2 for license information.
+Copyright (c) BCC contributors. All rights reserved.
+
+The Initial Developer of the source code in examples/cpp/pyperf is Facebook, Inc.
+Copyright (c) Facebook, Inc. All Rights Reserved.
