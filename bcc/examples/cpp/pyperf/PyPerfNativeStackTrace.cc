@@ -27,7 +27,9 @@ const uint8_t *NativeStackTrace::stack = NULL;
 size_t NativeStackTrace::stack_len = 0;
 uintptr_t NativeStackTrace::sp = 0;
 uintptr_t NativeStackTrace::ip = 0;
-MAP NativeStackTrace::cache;
+time_t  NativeStackTrace::now;
+UnwindCache NativeStackTrace::cache;
+
 
 NativeStackTrace::NativeStackTrace(uint32_t pid, const unsigned char *raw_stack,
                                    size_t stack_len, uintptr_t ip, uintptr_t sp) : error_occurred(false) {
@@ -35,6 +37,7 @@ NativeStackTrace::NativeStackTrace(uint32_t pid, const unsigned char *raw_stack,
   NativeStackTrace::stack_len = stack_len;
   NativeStackTrace::ip = ip;
   NativeStackTrace::sp = sp;
+  NativeStackTrace::now = time(NULL);
 
   if (stack_len == 0) {
     return;
@@ -56,7 +59,7 @@ NativeStackTrace::NativeStackTrace(uint32_t pid, const unsigned char *raw_stack,
   cache_eviction(cache);
 
   // Check whether the entry for the process ID is presented in the cache
-  if (is_cached(cache, pid) == false) {
+  if (!is_cached(cache, pid)) {
     logInfo(2,"The given key %d is not presented in the cache\n", pid);
    
     as = unw_create_addr_space(&my_accessors, 0);
@@ -84,10 +87,10 @@ NativeStackTrace::NativeStackTrace(uint32_t pid, const unsigned char *raw_stack,
   } else {
     logInfo(2,"Found entry for the given key %d in the cache\n", pid);
     // Get from the cache
-    Object cached_value = cache_get(cache, pid);
-    cursor = cached_value.cursor;
-    as = cached_value.as;
-    upt = cached_value.upt;
+    UnwindCacheEntry cached_entry = cache_get(cache, pid);
+    cursor = cached_entry.cursor;
+    as = cached_entry.as;
+    upt = cached_entry.upt;
   }
 
   do {
@@ -219,7 +222,7 @@ bool NativeStackTrace::error_occured() const {
   return error_occurred;
 }
 
-bool NativeStackTrace::is_cached(const MAP &map, const uint32_t &key) {
+bool NativeStackTrace::is_cached(const UnwindCache &map, const uint32_t &key) {
   try {
       map.at(key);
       return true;
@@ -230,41 +233,41 @@ bool NativeStackTrace::is_cached(const MAP &map, const uint32_t &key) {
   return false;
 }
 
-Object NativeStackTrace::cache_get(const MAP &map, const uint32_t &key) {
-  const Object & value = map.at(key);
-  return value;
+UnwindCacheEntry NativeStackTrace::cache_get(const UnwindCache &map, const uint32_t &key) {
+  const UnwindCacheEntry & entry = map.at(key);
+  return entry;
 }
 
-// cache_put adds a new entry to the map if the capacity allows
-void NativeStackTrace::cache_put(MAP &map, const uint32_t &key, const unw_cursor_t cursor, const unw_addr_space_t as, void *upt) {
-  
+// cache_put adds a new entry to the unwind cache if the capacity allows
+void NativeStackTrace::cache_put(UnwindCache &mp, const uint32_t &key, const unw_cursor_t cursor, const unw_addr_space_t as, void *upt) {  
   // Check available capacity
   if (cache_size() > NativeStackTrace::CacheMaxSizeMB*1024*1024 - cache_single_entry_size()) { 
     logInfo(2, "The cache usage is %.2f MB, close to reaching the max memory usage (%d MB)\n", cache_size_KB()/1024, NativeStackTrace::CacheMaxSizeMB);
-    logInfo(2, "Skipping adding an entry for %d to the cache\n", key);
-     
+    logInfo(2, "Skipping adding an entry for %d to the cache\n", key);     
     return;
   }
 
-  Object obj = {cursor, as, upt, time(NULL)};
-  map[key] = obj;
+  UnwindCacheEntry entry = {cursor, as, upt, now};
+  mp[key] = entry;
   logInfo(2, "New entry for %d was added to the cache\n", key);
 }
 
 // cache_delete_key removes the element from the cache and destroys unwind address space and UPT
 // to ensure that all memory and other resources are freed up
-bool NativeStackTrace::cache_delete_key(MAP &map, const uint32_t &key) {
+bool NativeStackTrace::cache_delete_key(UnwindCache &mp, const uint32_t &key) {
+  UnwindCacheEntry e;
   try {
-    Object v = cache_get(map, key);    
-    map.erase(key);
-    cleanup(v.upt, v.as);
-    logInfo(2, "The entry for %d was deleted from the cache\n", key);
-    return true;
+    e = cache_get(mp, key);
   }
   catch (const std::out_of_range&) {
     logInfo(2, "Failed to delete entry for %d: no such key in the cache\n", key);
+    return false;
   }
-  return false;
+
+  mp.erase(key);
+  cleanup(e.upt, e.as);
+  logInfo(2, "The entry for %d was deleted from the cache\n", key);
+  return true;
 }
 
 // cache_single_entry_size returns the number of bytes taken by single entry
@@ -283,15 +286,15 @@ float NativeStackTrace::cache_size_KB() const {
 }
 
 // cache_eviction removes elements older than 5 minutes (CacheMaxTTL=300)
-void NativeStackTrace::cache_eviction(MAP &map) {
+void NativeStackTrace::cache_eviction(UnwindCache &mp) {
   std::vector<uint32_t> keys_to_delete;
   float _prev_cache_size = cache_size_KB();
 
-  for(std::map<uint32_t, Object>::iterator iter = map.begin(); iter != map.end(); ++iter)
+  for(std::map<uint32_t, UnwindCacheEntry>::iterator iter = mp.begin(); iter != mp.end(); ++iter)
   {
     uint32_t k =  iter->first;
-    const Object & v =  iter->second;
-    if (std::abs(difftime(v.timestamp, time(NULL))) > NativeStackTrace::CacheMaxTTL) {
+    const UnwindCacheEntry & e =  iter->second;
+    if (std::abs(difftime(e.timestamp, NativeStackTrace::now)) > NativeStackTrace::CacheMaxTTL) {
       // exceeding TTL
       keys_to_delete.push_back(k);
     }
@@ -299,7 +302,7 @@ void NativeStackTrace::cache_eviction(MAP &map) {
 
   // Delete expired entries
   for( size_t i = 0; i < keys_to_delete.size(); i++ ) {
-      cache_delete_key(map, keys_to_delete[i]);
+      cache_delete_key(mp, keys_to_delete[i]);
   }
 
   if (keys_to_delete.size() > 0) {

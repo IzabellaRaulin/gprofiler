@@ -18,9 +18,9 @@ typedef struct {
   unw_addr_space_t as;
   void *upt;
   time_t timestamp;
-} Object;
+} UnwindCacheEntry;
 
-typedef std::map<uint32_t, Object> MAP;
+typedef std::map<uint32_t, UnwindCacheEntry> UnwindCache;
 
 class NativeStackTrace {
  public:
@@ -37,8 +37,9 @@ class NativeStackTrace {
   static size_t stack_len;
   static uintptr_t ip;
   static uintptr_t sp;
+  static time_t now;
 
-  static MAP cache;
+  static UnwindCache cache;
   static const uint16_t CacheMaxSizeMB;
   static const uint16_t CacheMaxTTL;
 
@@ -54,11 +55,11 @@ class NativeStackTrace {
 
   void cleanup(void *upt, unw_addr_space_t as);
 
-  bool is_cached(const MAP &map, const uint32_t &key);
-  void cache_put(MAP &map, const uint32_t &key, const unw_cursor_t cursor, const unw_addr_space_t as, void *upt);
-  Object cache_get(const MAP &map, const uint32_t &key);
-  bool cache_delete_key(MAP &map, const uint32_t &key);
-  void cache_eviction(MAP &map);
+  bool is_cached(const UnwindCache &map, const uint32_t &key);
+  void cache_put(UnwindCache &map, const uint32_t &key, const unw_cursor_t cursor, const unw_addr_space_t as, void *upt);
+  UnwindCacheEntry cache_get(const UnwindCache &map, const uint32_t &key);
+  bool cache_delete_key(UnwindCache &map, const uint32_t &key);
+  void cache_eviction(UnwindCache &map);
 };
 
 }  // namespace pyperf
